@@ -6,11 +6,11 @@ locals {
   validation_domains = var.create_certificate ? [for k, v in aws_acm_certificate.this[0].domain_validation_options : tomap(v) if contains(local.distinct_domain_names, replace(v.domain_name, "\\*\\.", ""))] : []
 
   host_to_zone_regex = "/^(?:.*\\.)?([^.]+\\.[^.]+)$/"
-  zone_id_map        = zipmap(local.distinct_domain_names, data.aws_route53_zone.this.*.zone_id)
+  zone_id_map        = var.validate_certificate ? zipmap(local.distinct_domain_names, data.aws_route53_zone.this.*.zone_id) : {}
 }
 
 data "aws_route53_zone" "this" {
-  count = length(local.distinct_domain_names)
+  count = var.create_certificate && var.validation_method == "DNS" && var.validate_certificate ? length(local.distinct_domain_names) : 0
 
   name         = replace(local.distinct_domain_names[count.index], local.host_to_zone_regex, "$1")
   private_zone = false
