@@ -1,9 +1,19 @@
 locals {
   # Get distinct list of domains and SANs
-  distinct_domain_names = distinct(concat([var.domain_name], [for s in var.subject_alternative_names : replace(s, "*.", "")]))
+  distinct_domain_names = distinct(concat([replace(var.domain_name, "*.", "")], [for s in var.subject_alternative_names : replace(s, "*.", "")]))
 
   # Copy domain_validation_options for the distinct domain names
-  validation_domains = var.create_certificate ? [for k, v in aws_acm_certificate.this[0].domain_validation_options : tomap(v) if contains(local.distinct_domain_names, replace(v.domain_name, "*.", ""))] : []
+  validation_domains = var.create_certificate ? [for k, v in aws_acm_certificate.this[0].domain_validation_options : tomap(v) if contains(local.distinct_domain_names, replace(v.domain_name, "\\*\\.", ""))] : []
+
+  host_to_zone_regex = "/^(?:.*\\.)?([^.]+\\.[^.]+)$/"
+  zone_id_map        = zipmap(local.distinct_domain_names, data.aws_route53_zone.this.*.zone_id)
+}
+
+data "aws_route53_zone" "this" {
+  count = length(local.distinct_domain_names)
+
+  name         = replace(local.distinct_domain_names[count.index], local.host_to_zone_regex, "$1")
+  private_zone = false
 }
 
 resource "aws_acm_certificate" "this" {
@@ -25,9 +35,9 @@ resource "aws_acm_certificate" "this" {
 }
 
 resource "aws_route53_record" "validation" {
-  count = var.create_certificate && var.validation_method == "DNS" && var.validate_certificate ? length(local.distinct_domain_names) + 1 : 0
+  count = var.create_certificate && var.validation_method == "DNS" && var.validate_certificate ? length(local.distinct_domain_names) : 0
 
-  zone_id = var.zone_id
+  zone_id = lookup(local.zone_id_map, element(local.validation_domains, count.index)["domain_name"], var.zone_id)
   name    = element(local.validation_domains, count.index)["resource_record_name"]
   type    = element(local.validation_domains, count.index)["resource_record_type"]
   ttl     = var.dns_ttl
