@@ -27,3 +27,8 @@ output "validation_domains" {
   description = "List of distinct domain validation options. This is useful if subject alternative names contain wildcards."
   value       = local.validation_domains
 }
+
+output "zone_id_map" {
+  description = "List of distinct domains to hosted zone id."
+  value       = local.zone_id_map
+}
